@@ -1,0 +1,121 @@
+from Crypto.Util.number import getPrime, inverse, bytes_to_long, long_to_bytes
+import hashlib
+import random
+import math
+import sys
+from sympy import mod_inverse, nextprime
+sys.set_int_max_str_digits(50000)
+
+first_primes_list = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29,
+					31, 37, 41, 43, 47, 53, 59, 61, 67,
+					71, 73, 79, 83, 89, 97, 101, 103,
+					107, 109, 113, 127, 131, 137, 139,
+					149, 151, 157, 163, 167, 173, 179,
+					181, 191, 193, 197, 199, 211, 223,
+					227, 229, 233, 239, 241, 251, 257,
+					263, 269, 271, 277, 281, 283, 293,
+					307, 311, 313, 317, 331, 337, 347, 349]
+
+def nBitRandom(n):
+	return random.randrange(2**(n-1)+1, 2**n - 1)
+
+def getLowLevelPrime(n):
+	while True:
+		pc = nBitRandom(n)
+		for divisor in first_primes_list:
+			if pc % divisor == 0 and divisor**2 <= pc:
+				break
+		else:
+			return pc
+
+def isMillerRabinPassed(mrc):
+	maxDivisionsByTwo = 0
+	ec = mrc - 1
+	while ec % 2 == 0:
+		ec >>= 1
+		maxDivisionsByTwo += 1
+	assert(2**maxDivisionsByTwo * ec == mrc - 1)
+
+	def trialComposite(round_tester):
+		if pow(round_tester, ec, mrc) == 1:
+			return False
+		for i in range(maxDivisionsByTwo):
+			if pow(round_tester, 2**i * ec, mrc) == mrc - 1:
+				return False
+		return True
+
+	numberOfRabinTrials = 20
+	for _ in range(numberOfRabinTrials):
+		round_tester = random.randrange(2, mrc)
+		if trialComposite(round_tester):
+			return False
+	return True
+
+def generate_large_prime(n):
+	while True:
+		prime_candidate = getLowLevelPrime(n)
+		if isMillerRabinPassed(prime_candidate):
+			return prime_candidate
+
+def gcd(a, b):
+    while b != 0:
+        a, b = b, a % b
+    return a
+
+
+def generate_key_pair(p, q):
+    n = p * q
+    phi = (p - 1) * (q - 1)
+    e = random.randrange(1, phi)
+    g = gcd(e, phi)
+    while g != 1:
+        e = random.randrange(1, phi)
+        g = gcd(e, phi)
+    d = mod_inverse(e, phi)
+    return (e, n), (d, n)
+
+def encrypt(pk, plaintext):
+    key, n = pk
+    return [pow(ord(char), key, n) for char in plaintext]
+
+def decrypt(pk, ciphertext):
+    key, n = pk
+    return ''.join([chr(pow(char, key, n)) for char in ciphertext])
+
+def message_to_number(message):
+    return int.from_bytes(message.encode(), byteorder='big')
+
+def sign(private_key, message):
+    key, n = private_key
+    message_hash = message_to_number(message)
+    signature = pow(message_hash, key, n)
+    return signature
+
+def verify(public_key, message, signature):
+    key, n = public_key
+    message_hash = message_to_number(message) % n
+    hash_from_signature = pow(signature, key, n)
+    return message_hash == hash_from_signature
+
+if __name__ == '__main__':
+    p = 9818033588879363531271211077365120833202144974368142994010665585385489188801552935267021207056124005465115991618089176837192784568627342191375114711099243890395463059130142733167022813405234951899749106613685179166078738550844170321384144013429947028941064758332285164096741586855046286658093264902171351618351734296784196299368752647978424277390649204887396886640818902124820004443244024926814189875894634917639572606628544687973304918559703980920591039901881947511183034521270557936001465390882286574993921945904736570291660771418380436478608449367909997645229630334449533322188509389910263830543313402948802096755538795821504481556256399151712495177376466841965411778164199509383680082613858485461792460489782627429037196844516351227384093368000217742093795379317506079140427644890013585459129819155134429501209755789612154647776376674211233679344060787910953715413567188088736545162980434368228603981956721218019408042362281255672576227657161174986695636295597857008145999797597708367449114479893670664857180254641569872072643030263846552992480702879462913398330508675881581780597350476814626514540541428984716133981090762895191761495656447845308949658516383500492360440301756030291779049591855337023
+    q = 10008988028658464588317936755352032845438583200474547511189396289558657716061630748833862720447463804200767360422602374605703982999046285231694975030625853485434128897372778123694924428861262032184289516147757725272229283613320143173099949728069708574215834606453996725139453134586903457191335090687357939270587791514665091699726846107343840476726041638643836794112469386686972598985984483380591589817989472534819783666674075966262195707747056426596529231138570839985463787570073759832320053020920520777269151349809421860855606829248514458114625853899016618856971715977982567304397073613678845023614375057478431030591470565502468195783483073654360449541035133611468037878450663902506007647840727320287764638163351502652861959706818019593593926525769782276889517906811847060052996954986167356096985386851232500425474456291817083674401651722901090785034155851662963153658397785809683373170891223382362383287932550358948988496896632467713023860176832420471412441952325089827144903967155166155839522572688728060028226092112673997188249429326425674906448693457750932419751836777875936594655608148558302181734552485232321857808405979296675887032412582994060273379976627327084500057462028621343070602891608664281
+   
+    print("p = ", p)
+    print("q = ", q)
+    print("Generating public/private key pairs...")
+    public, private = generate_key_pair(p, q)
+
+    print("Your public key is ", public)
+    print("Your private key is ", private)
+
+    message = input("Enter a message to encrypt with your public key: ")
+    encrypted_msg = encrypt(public, message)
+
+    print("Your encrypted message is: ", ''.join(map(lambda x: str(x), encrypted_msg)))
+    print("Decrypting message with private key ", private)
+    print("Your message is: ", decrypt(private, encrypted_msg))
+    number = message_to_number(message)
+    signature = sign(private, message)
+    print(f"signature: {signature}")
+    print(f"verify: {verify(public, message, signature)}")
